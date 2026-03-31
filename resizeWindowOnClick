@@ -1,0 +1,102 @@
+import ctypes
+import time
+
+user32 = ctypes.windll.user32
+
+# ===== SETTINGS =====
+TARGET_WIDTH = pixels
+TARGET_HEIGHT = pixels
+MOVE_TO_TOP = True   # True = y = 0
+# ====================
+
+SW_RESTORE = 9
+MONITOR_DEFAULTTONEAREST = 2
+VK_LBUTTON = 0x01
+
+
+class RECT(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
+
+
+class MONITORINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_ulong),
+        ("rcMonitor", RECT),
+        ("rcWork", RECT),
+        ("dwFlags", ctypes.c_ulong),
+    ]
+
+
+def get_foreground_window():
+    return user32.GetForegroundWindow()
+
+
+def restore_window(hwnd):
+    user32.ShowWindow(hwnd, SW_RESTORE)
+
+
+def get_monitor_work_area(hwnd):
+    monitor = user32.MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)
+    mi = MONITORINFO()
+    mi.cbSize = ctypes.sizeof(MONITORINFO)
+    user32.GetMonitorInfoW(monitor, ctypes.byref(mi))
+    return mi.rcWork
+
+
+def move_window(hwnd, x, y, width, height):
+    user32.MoveWindow(hwnd, x, y, width, height, True)
+
+
+def resize_clicked_window():
+    print("Click the window you want to resize...")
+
+    while True:
+        if user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000:
+            break
+        time.sleep(0.01)
+
+    time.sleep(0.15)
+
+    hwnd = get_foreground_window()
+    if not hwnd:
+        print("No active window found.")
+        return
+
+    restore_window(hwnd)
+
+    work = get_monitor_work_area(hwnd)
+    work_left = work.left
+    work_top = work.top
+    work_right = work.right
+    work_bottom = work.bottom
+
+    work_width = work_right - work_left
+    work_height = work_bottom - work_top
+
+    # Never allow requested size to exceed the usable screen area
+    final_width = min(TARGET_WIDTH, work_width)
+    final_height = min(TARGET_HEIGHT, work_height)
+
+    # Center horizontally
+    x = work_left + (work_width - final_width) // 2
+
+    # Top align or center vertically
+    if MOVE_TO_TOP:
+        y = work_top
+    else:
+        y = work_top + (work_height - final_height) // 2
+
+    move_window(hwnd, x, y, final_width, final_height)
+
+    print(f"Requested size: {TARGET_WIDTH} x {TARGET_HEIGHT}")
+    print(f"Applied size:   {final_width} x {final_height}")
+    print("Window resized. Exiting.")
+
+
+if __name__ == "__main__":
+    resize_clicked_window()
